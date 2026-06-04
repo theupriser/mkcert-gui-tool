@@ -5,20 +5,20 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 
-// Maak __dirname handmatig aan voor ES Modules zodat we relatief aan de app-broncode kunnen zoeken
+// Resolve __dirname manually for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Schakel hardwareversnelling uit voor stabiliteit op Linux
+// Disable hardware acceleration for stability on Linux/Ubuntu
 app.disableHardwareAcceleration();
 
-// Vlaggen voor Linux GUI support (alleen toevoegen als we niet als worker draaien)
+// Apply GUI flags for Linux when not running in background worker mode
 if (!process.argv.includes('--worker')) {
   process.argv.push('--no-sandbox', '--enable-features=UseOzonePlatform', '--ozone-platform=x11');
 }
 
 // ==========================================
-// 1. DE ACHTERGROND WORKER LOGICA
+// 1. BACKGROUND WORKER LOGIC
 // ==========================================
 function runBackgroundWorker() {
   const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -28,10 +28,6 @@ function runBackgroundWorker() {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     const domainsString = config.domains;
     let targetDir = config.directory || path.join(os.homedir(), '.local', 'share', 'mkcert-certs');
-
-    if (Array.isArray(targetDir)) {
-      targetDir = targetDir[0];
-    }
 
     if (!domainsString) app.quit();
     if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
@@ -47,12 +43,12 @@ function runBackgroundWorker() {
   app.quit();
 }
 
-// Controleer direct bij opstarten of de app als achtergrondtaak draait
+// Intercept early initialization to check for background tasks
 if (process.argv.includes('--worker')) {
   app.whenReady().then(runBackgroundWorker);
 } else {
   app.whenReady().then(() => {
-    // Verbergt de menubalk ook op macOS
+    // Hide top menus on macOS
     if (process.platform === 'darwin') {
       Menu.setApplicationMenu(Menu.buildFromTemplate([]));
     }
@@ -72,7 +68,7 @@ function createWindow() {
     }
   });
   
-  // VERWIDERT DE MENUBALK (File, Edit, View, enz.) op Windows en Linux
+  // Hide top application menu bar on Windows and Linux
   mainWindow.setMenu(null);
   
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -103,7 +99,7 @@ function toggleScheduler(enable) {
         const cmd = `schtasks /create /tn "${taskName}" /tr "${workerCommand.replace(/"/g, '\\"')}" /sc daily /st 00:00 /f`;
         execSync(cmd);
       }
-    } catch (err) { console.error('Windows Task Scheduler fout:', err.message); }
+    } catch (err) { console.error('Windows Task Scheduler error:', err.message); }
   } else {
     try {
       let currentCrontab = '';
@@ -119,7 +115,7 @@ function toggleScheduler(enable) {
       const newCrontab = lines.join('\n') + '\n';
       fs.writeFileSync(path.join(os.tmpdir(), 'cron_tmp'), newCrontab);
       execSync('crontab ' + path.join(os.tmpdir(), 'cron_tmp'));
-    } catch (err) { console.error('Crontab fout:', err.message); }
+    } catch (err) { console.error('Crontab error:', err.message); }
   }
 }
 
@@ -147,12 +143,12 @@ ipcMain.handle('check-root-ca', async () => {
     const isWindows = process.platform === 'win32';
     const checkCommand = isWindows ? 'where mkcert' : 'which mkcert';
     try { execSync(checkCommand, { stdio: 'ignore' }); } catch (e) {
-      return { installed: false, missingBinary: true, error: '❌ mkcert is niet gevonden!' };
+      return { installed: false, missingBinary: true, error: '❌ mkcert binary was not found on this system! Please install mkcert and restart.' };
     }
     const caRootPath = execSync('mkcert -CAROOT', { encoding: 'utf-8' }).trim();
     if (fs.existsSync(path.join(caRootPath, 'rootCA.pem'))) return { installed: true, path: caRootPath };
     return { installed: false, missingBinary: false };
-  } catch (error) { return { installed: false, missingBinary: false, error: 'Fout bij statuscontrole.' }; }
+  } catch (error) { return { installed: false, missingBinary: false, error: 'Error during system status verification.' }; }
 });
 
 ipcMain.handle('install-root-ca', async () => {
@@ -161,10 +157,10 @@ ipcMain.handle('install-root-ca', async () => {
 
 ipcMain.handle('select-directory', async () => {
   const result = await dialog.showOpenDialog(mainWindow, { 
-    title: 'Selecteer Certificaten Map',
+    title: 'Select Certificates Directory',
     properties: ['openDirectory', 'createDirectory', 'noResolveAliases'], 
     defaultPath: os.homedir(),
-    buttonLabel: 'Kies Map'
+    buttonLabel: 'Choose Folder'
   });
   return result.canceled ? null : result.filePaths;
 });
@@ -175,17 +171,16 @@ ipcMain.handle('generate-certs', async (event, { domainsString, targetDir }) => 
     if (Array.isArray(finalDir)) {
       finalDir = finalDir[0];
     }
-    
     finalDir = finalDir || path.join(os.homedir(), '.local', 'share', 'mkcert-certs');
 
     if (!fs.existsSync(finalDir)) fs.mkdirSync(finalDir, { recursive: true });
     const domainsArray = domainsString.split(',').map(d => `"${d.trim()}"`).filter(d => d !== '""').join(' ');
-    if (!domainsArray) return { success: false, message: 'Geen geldige domeinen ingevoerd.' };
+    if (!domainsArray) return { success: false, message: 'No valid domains entered.' };
     
     const certFile = path.join(finalDir, 'local.pem');
     const keyFile = path.join(finalDir, 'local-key.pem');
     execSync(`mkcert -cert-file "${certFile}" -key-file "${keyFile}" ${domainsArray}`);
-    return { success: true, message: `Certificaten opgeslagen in:\n${finalDir}` };
+    return { success: true, message: `Certificates successfully saved to:\n${finalDir}` };
   } catch (error) { return { success: false, message: error.message }; }
 });
 

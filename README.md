@@ -1,90 +1,82 @@
 # Mkcert GUI Tool 🔐
 
-Een moderne, cross-platform desktop applicatie (GUI) gebouwd met Electron om eenvoudig lokale SSL-certificaten te genereren, te beheren en dagelijks automatisch te vernieuwen via `mkcert`. Werkt naadloos op **Ubuntu/Linux, Windows en macOS**.
+A modern, cross-platform desktop application (GUI) built with Electron to easily generate, manage, and automatically renew local SSL certificates daily using `mkcert`. Runs seamlessly on **Ubuntu/Linux, Windows, and macOS**.
 
 ---
 
-## ✨ Functionaliteiten
+## ✨ Features
 
-- **Visuele interface**: Voeg eenvoudig domeinen toe (gescheiden door komma's) en kies visueel de opslagmap via de ingebouwde mappenkiezer.
-- **Onthoudt instellingen**: De laatst gebruikte domeinen en maplocatie worden automatisch permanent onthouden.
-- **Systeem Status-check**: Controleert bij het opstarten automatisch of `mkcert` op je computer staat en of de Root CA vertrouwd is.
-- **Geautomatiseerde Planning (OS Scheduler)**: Vink de checkbox aan om certificaten elke nacht om 00:00 uur automatisch op de achtergrond te vernieuwen (via `crontab` op Linux/macOS en *Windows Taakplanner* op Windows).
-- **Minimalistisch design**: Een strak venster zonder menu-bars, geoptimaliseerd voor Linux (X11/Wayland support ingebouwd).
+- **Visual Interface**: Simply append domains (comma-separated) and visually target output directories via a native file browsing dialog.
+- **Persistent State**: Automatically preserves domains and directory history across instances.
+- **Environment Status Banner**: Verifies both `mkcert` binaries and local Root CA configurations automatically on boot.
+- **Automated Scheduling (OS Scheduler)**: A checkbox configuration to deploy unattended background certificate renewals daily at 00:00 (via `crontab` on Linux/macOS and *Task Scheduler* on Windows).
+- **Minimalist Architecture**: Clean system interfaces stripped of redundant top frame menus, fully optimized for modern display managers (X11/Wayland support included).
 
 ---
 
-## 📋 Vereisten
+<!-- ## 📋 Requirements
 
-De applicatie maakt gebruik van `mkcert` op je lokale machine. Zorg ervoor dat deze in je systeem-pad (`PATH`) staat:
+The tool wraps your operating system's global `mkcert` environment. Ensure it is accessible in your system `PATH`:
 
 - **Ubuntu/Linux**: `sudo apt install mkcert`
 - **macOS**: `brew install mkcert`
-- **Windows**: `choco install mkcert` of `scoop install mkcert`
+- **Windows**: `choco install mkcert` or `scoop install mkcert`
 
----
+--- -->
 
-## 🚀 Lokale Ontwikkeling (Dev)
+## 🚀 Local Development
 
-Volg deze stappen om het project lokaal op te starten in ontwikkelmodus:
+Follow these operations to initiate local development:
 
-1. **Clone of navigeer naar de projectmap**:
+1. **Navigate to the target directory**:
    ```bash
    cd mkcert-gui-tool
    ```
 
-2. **Installeer de dependencies**:
+2. **Deploy dependencies**:
    ```bash
    npm install
    ```
 
-3. **Start de applicatie**:
+3. **Boot the client**:
    ```bash
    npm start
    ```
 
-### Handmatig de Achtergrond Worker testen:
-Wil je testen of de automatische planner (zonder GUI) goed werkt? Draai dan de app met de `--worker` vlag:
+### Manually invoking Background Worker tasks:
+To evaluate headless execution scripts without waiting for scheduler bounds, manually call the application worker route via:
 ```bash
 npx electron . --worker
 ```
 
 ---
 
-## 📦 Productie Binary Bouwen (Build)
+## 📦 Production Builds
 
-Je kunt de applicatie compileren naar een kant-en-klaar installatiebestand (zoals een `.deb` voor Ubuntu of een `.exe` voor Windows) met **Electron Forge**.
+Compile production installers (such as `.deb` or `.rpm` for Linux, `.exe` for Windows) via **Electron Forge**.
 
-Voer het volgende commando uit in je terminal:
+Execute the compilation sequence:
 ```bash
 npm run make
 ```
 
-### Waar vind ik de installatiebestanden?
-Na het bouwen vind je de distributiebestanden in de map:
+### Destination Paths
+Once compiled, standard distribution modules are stored under:
 `out/make/`
 
-- **Ubuntu/Linux**: Levert een `.deb` bestand op (te vinden in `out/make/deb/x64/`). Installeer deze via:
+- **Ubuntu/Linux**: Output builds are created inside `out/make/deb/x64/`. Deploy via package managers:
   ```bash
   sudo dpkg -i out/make/deb/x64/mkcert-gui-tool_*.deb
   ```
-  *Na installatie is de app direct vindbaar in je Ubuntu Applicatiemenu (Application Launcher).*
-
-- **Windows**: Levert een `.exe` installer op (`out/make/squirrel.windows/x64/`).
-- **macOS**: Levert een `.app` of `.dmg` op (moet worden uitgevoerd op een Mac).
+- **Windows**: Distribution executables compile to `out/make/squirrel.windows/x64/`.
+- **macOS**: Native DMG formats populate within structural workspace targets.
 
 ---
 
-## 🛠️ Project Structuur
+## 🛠️ Repository Mapping
 
-- `main.js`: De Electron-backend. Regelt de interactie met het OS (`mkcert` executie, Crontab / Windows Task Scheduler logica en de achtergrond `--worker` modus).
-- `preload.cjs`: De beveiligde IPC-bridge tussen de web-frontend en Node.js.
-- `index.html`: De grafische interface (HTML/CSS/JS) met automatische status-banners en state-opslag.
-- `forge.config.cjs`: De build-configuratie van de applicatie, inclusief Linux-desktop integratie.
-- `package.json`: Bevat project-metadata en de benodigde scripts.
-
----
-
-## 📄 Licentie
-
-Dit project is gelicentieerd onder de **MIT** licentie - zie het `package.json` bestand voor details.
+- `main.js`: Core system orchestration layer (handles automated shell processes, tasks setups, and worker pipelines).
+- `preload.cjs`: Isolated secure context proxy between UI frontends and local environments.
+- `index.html`: The layout application surface rendering operational analytics logs and triggers.
+- `forge.config.cjs`: Compilation manifest handling target distributions.
+- `package.json`: Application schema index cataloging scripts and packages.

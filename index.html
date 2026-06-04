@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Mkcert GUI Tool</title>
@@ -29,31 +29,31 @@
 <body>
 
   <div id="status-banner" class="status-banner status-danger" style="display: none;">
-    <span id="status-text">Status laden...</span>
-    <button id="btn-install-ca" class="btn-danger" style="display: none;">Nu Installeren</button>
+    <span id="status-text">Loading status...</span>
+    <button id="btn-install-ca" class="btn-danger" style="display: none;">Install Now</button>
   </div>
 
   <div class="app-content">
     <h2>Local Certificate Generator</h2>
     
-    <label for="domains">1. Domeinen (gescheiden door een komma):</label>
+    <label for="domains">1. Domains (separated by commas):</label>
     <textarea id="domains">traefik.test, portainer.test, phpmyadmin.test, *.dev.socialdeal.nl</textarea>
 
-    <label for="directory">2. Opslagmap voor certificaten:</label>
+    <label for="directory">2. Certificates Destination Directory:</label>
     <div class="dir-container">
-      <input type="text" id="directory" placeholder="Standaard gebruikersmap..." readonly>
-      <button id="btn-browse" class="btn-secondary">Bladeren...</button>
+      <input type="text" id="directory" placeholder="Default user directory..." readonly>
+      <button id="btn-browse" class="btn-secondary">Browse...</button>
     </div>
 
     <div class="checkbox-container">
       <input type="checkbox" id="auto-schedule">
-      <label for="auto-schedule"><strong>Dagelijks automatisch vernieuwen</strong> (Voeg toe aan Crontab / Windows Taakplanner)</label>
+      <label for="auto-schedule"><strong>Automatically renew daily</strong> (Add to Crontab / Windows Task Scheduler)</label>
     </div>
 
-    <button id="btn-generate" class="btn-primary">Genereer Certificaten</button>
+    <button id="btn-generate" class="btn-primary">Generate Certificates</button>
 
     <h3>Status Log:</h3>
-    <pre id="log">Systeem controleren...</pre>
+    <pre id="log">Verifying environment status...</pre>
   </div>
 
   <script>
@@ -74,11 +74,7 @@
       if (savedSettings) {
         if (savedSettings.domains) domainsInput.value = savedSettings.domains;
         if (savedSettings.directory) {
-          if (Array.isArray(savedSettings.directory)) {
-            selectedDirectory = savedSettings.directory[0];
-          } else {
-            selectedDirectory = savedSettings.directory;
-          }
+          selectedDirectory = Array.isArray(savedSettings.directory) ? savedSettings.directory[0] : savedSettings.directory;
           directoryInput.value = selectedDirectory;
         }
         if (savedSettings.autoSchedule !== undefined) {
@@ -93,37 +89,37 @@
       statusBanner.style.display = 'flex';
       if (status.installed) {
         statusBanner.className = 'status-banner status-success';
-        statusText.innerText = '✅ mkcert & Root CA zijn succesvol geïnstalleerd.';
+        statusText.innerText = '✅ mkcert & Root CA are successfully installed and trusted.';
         btnInstallCa.style.display = 'none';
         btnGenerate.disabled = false;
         btnGenerate.style.opacity = '1';
-        logOutput.innerText = 'Klaar voor gebruik.';
+        logOutput.innerText = 'Ready for use.';
       } else if (status.missingBinary) {
         statusBanner.className = 'status-banner status-danger';
         statusText.innerText = status.error;
         btnInstallCa.style.display = 'none';
         btnGenerate.disabled = true;
         btnGenerate.style.opacity = '0.5';
-        logOutput.innerText = '⚠️ Actie vereist: Installeer mkcert op je computer.';
+        logOutput.innerText = '⚠️ Action required: Install mkcert on your local machine.';
       } else {
         statusBanner.className = 'status-banner status-danger';
-        statusText.innerText = '❌ Root CA is nog NIET geïnstalleerd en vertrouwd!';
+        statusText.innerText = '❌ Local Root CA is NOT installed or trusted!';
         btnInstallCa.style.display = 'block';
         btnGenerate.disabled = false;
         btnGenerate.style.opacity = '1';
-        logOutput.innerText = '⚠️ Tip: Klik op "Nu Installeren".';
+        logOutput.innerText = '⚠️ Hint: Click "Install Now" to trust certificates locally.';
       }
     }
 
     initApp();
 
     btnInstallCa.addEventListener('click', async () => {
-      logOutput.innerText = 'Bezig met installeren van Root CA...';
+      logOutput.innerText = 'Installing Local Root CA...';
       const result = await window.electronAPI.installRootCA();
       if (result.success) {
-        logOutput.innerText = `✅ Root CA succesvol geïnstalleerd!\n\n${result.message}`;
+        logOutput.innerText = `✅ Root CA successfully trusted!\n\n${result.message}`;
         checkCAStatus();
-      } else { logOutput.innerText = `❌ Installatie mislukt:\n\n${result.message}`; }
+      } else { logOutput.innerText = `❌ Installation failed:\n\n${result.message}`; }
     });
 
     btnBrowse.addEventListener('click', async () => {
@@ -135,25 +131,25 @@
     });
 
     btnGenerate.addEventListener('click', async () => {
-      logOutput.innerText = 'Bezig met genereren...';
+      logOutput.innerText = 'Generating local SSL certificates...';
       const result = await window.electronAPI.generateCerts({
         domainsString: domainsInput.value,
         targetDir: selectedDirectory
       });
       
       if (result.success) {
-        logOutput.innerText = `✅ Succes!\n\n${result.message}`;
+        logOutput.innerText = `✅ Success!\n\n${result.message}`;
         await window.electronAPI.saveSettings({
           domains: domainsInput.value,
           directory: selectedDirectory,
           autoSchedule: autoScheduleCheckbox.checked
         });
         if (autoScheduleCheckbox.checked) {
-          logOutput.innerText += `\n\n⏰ Automatische dagelijkse taak succesvol ingepland om 00:00!`;
+          logOutput.innerText += `\n\n⏰ Automated execution scheduled daily at 00:00!`;
         } else {
-          logOutput.innerText += `\n\nVolledig handmatige modus actief.`;
+          logOutput.innerText += `\n\nManual execution mode enabled.`;
         }
-      } else { logOutput.innerText = `❌ Fout opgetreden:\n\n${result.message}`; }
+      } else { logOutput.innerText = `❌ Error occurred:\n\n${result.message}`; }
     });
   </script>
 </body>
