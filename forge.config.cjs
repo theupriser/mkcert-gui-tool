@@ -6,7 +6,7 @@ module.exports = {
     asar: true,
   },
   rebuildConfig: {},
-    makers: [
+  makers: [
     {
       name: '@electron-forge/maker-squirrel',
       config: {},
@@ -17,11 +17,19 @@ module.exports = {
     },
     {
       name: '@electron-forge/maker-deb',
+      config: {
+        options: {
+          categories: ['Utility', 'Development'],
+          genericName: 'Local Certificate Generator',
+          desktopTemplate: null 
+        }
+      },
+    },
+    {
+      name: '@electron-forge/maker-rpm', // Weer toegevoegd voor de GitHub Actions build
       config: {},
     }
-    // De maker-rpm is hier volledig weggehaald
   ],
-
   plugins: [
     {
       name: '@electron-forge/plugin-auto-unpack-natives',
