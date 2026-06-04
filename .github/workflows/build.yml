@@ -2,17 +2,16 @@ name: Release Electron App
 
 on:
   push:
-    branches: [ master, main ] # Triggers automatically on every push to master or main
-  workflow_dispatch: # Allows manual execution from the GitHub UI
+    branches: [ master, main ]
+  workflow_dispatch:
 
-# Enforce Node.js 24 compliance and explicit runner variables
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-release:
     permissions:
-      contents: write # Required to publish assets to the Release page
+      contents: write
     
     strategy:
       fail-fast: false
@@ -21,55 +20,43 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      # 1. Fetch code from repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup standard Node.js runtime using Node 24
-      - name: Setup Node.js
+      - name: Setup Node.js (Node 24)
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
 
-      # 3. Install required platform packages (xvfb maps virtual displays for Linux headless builds)
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg xvfb libsecret-1-dev
 
-      # 4. Clean install project dependencies
       - name: Install dependencies
         run: npm ci
 
-      # 5. Compile installers (using virtual display wrapper for Linux to guarantee package output)
+      # Bouw de app (Met virtuele display op Linux)
       - name: Run Electron Forge Make (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" npm run make
 
+      # Bouw de app op Windows en Mac
       - name: Run Electron Forge Make (Windows / macOS)
         if: matrix.os != 'ubuntu-latest'
         run: npm run make
 
-      # 6. FILTER & COLLECT: Extract only clean binaries into a flat workspace, fully skipping .zip files
-      - name: Collect Target Binaries (Linux / macOS)
-        if: matrix.os != 'windows-latest'
+      # VERZAMELEN: We pakken direct de installers uit de geforceerde map en negeren de zips
+      - name: Process Distributables
         run: |
-          mkdir -p production-artifacts
-          find . -type d \( -name "node_modules" -o -name "production-artifacts" \) -prune -o -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} production-artifacts/ \;
-          echo "=== Collected Binary Artifacts ==="
-          ls -la production-artifacts/ || true
+          mkdir -p production-binaries
+          find dist-packages/ -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.exe" \) -exec cp {} production-binaries/ \; || true
+          echo "=== Found the following binaries in the correct folder ==="
+          ls -la production-binaries/
 
-      - name: Collect Target Binaries (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          mkdir production-artifacts
-          Get-ChildItem -Path . -Recurse -Filter *.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*production-artifacts*" } | Copy-Item -Destination production-artifacts/
-          Write-Output "=== Collected Binary Artifacts ==="
-          Get-ChildItem -Path production-artifacts/
-
-      # 7. DEPLOY: Attach individual clean binaries natively to the 'latest' release layout
+      # PUBLICEREN: Hang de losse binaries direct aan de 'latest' release
       - name: Deploy Separate Assets to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
@@ -79,4 +66,4 @@ jobs:
           body: 'This release always contains the separate Electron download binaries from the latest commit.'
           overwrite_files: true
           make_latest: true
-          files: production-artifacts/*
+          files: production-binaries/*
