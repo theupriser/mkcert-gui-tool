@@ -1,0 +1,11 @@
+node_modules/
+out/
+dist/
+build/
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+.vscode/
+.idea/
