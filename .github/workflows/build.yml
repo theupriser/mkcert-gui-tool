@@ -5,9 +5,9 @@ on:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
-  workflow_dispatch: # Maakt het mogelijk om de build handmatig te starten via GitHub
+  workflow_dispatch: # Allows manual execution from the GitHub UI
 
-# Zorgt voor Node.js 24 compatibiliteit volgens de richtlijnen
+# Forces Node.js 24 environment compatibility
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -16,66 +16,59 @@ jobs:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     permissions:
-      contents: write # Verplicht om bestanden naar de Release-pagina te mogen schrijven
+      contents: write # Required to publish assets to the Release page
     
     strategy:
       fail-fast: false
       matrix:
-        # We gebruiken de drie verschillende OS runners van GitHub
+        # We use the three main GitHub OS runners
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
-      # 1. Haal de code op uit de repository
+      # 1. Checkout repository code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installeer Node.js
+      # 2. Setup Node.js workspace runtime
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
 
-      # 3. Systeem-specifieke dependencies installeren (Alleen nodig op Linux voor DEB/RPM)
+      # 3. Install system-specific compilation libraries (Only required on Ubuntu/Linux)
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg
 
-      # 4. Installeer alle project dependencies
+      # 4. Install app project dependencies
       - name: Install dependencies
         run: npm ci
 
-      # 5. Voer het Electron Forge compiler-commando uit
+      # 5. Run the Electron Forge compilation pipeline
       - name: Run Electron Forge Make
         run: npm run make
 
-      # 6. VERZAMELEN: Zoek flexibel in het hele project naar de juiste extensies (behalve node_modules)
+      # 6. COLLECTING: Find binaries in the entire project workspace (ignoring node_modules)
       - name: Collect Distributables (Linux / macOS)
         if: matrix.os != 'windows-latest'
         run: |
           mkdir -p dist-artifacts
-          # Zoekt overal naar .deb, .rpm en .dmg bestanden en negeert node_modules en dist-artifacts zelf
           find . -type d \( -name "node_modules" -o -name "dist-artifacts" \) -prune -o -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} dist-artifacts/ \;
-          
           echo "=== Collected artifacts ==="
           ls -la dist-artifacts/ || true
 
-       Taras: Collect Distributables (Windows)
       - name: Collect Distributables (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           mkdir dist-artifacts
-          # Zoekt in de hele projectmap naar .exe bestanden, met uitzondering van node_modules
-          Get-ChildItem -Path . -Recurse -Filter *.exe -ErrorAction SilentlyContinue | 
-            Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*dist-artifacts*" } | 
-            Copy-Item -Destination dist-artifacts/
-          
+          Get-ChildItem -Path . -Recurse -Filter *.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*dist-artifacts*" } | Copy-Item -Destination dist-artifacts/
           Write-Output "=== Collected artifacts ==="
           Get-ChildItem -Path dist-artifacts/
 
-      # 7. PUBLICEREN: Hang de losse binaries direct aan de 'latest' release (oude bestanden worden overschreven)
+      # 7. PUBLISHING: Attach individual clean binaries directly to the 'latest' release
       - name: Deploy Binaries to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
