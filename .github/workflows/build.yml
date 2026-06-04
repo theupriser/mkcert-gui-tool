@@ -1,75 +1,76 @@
-name: Build Cross-Platform Binaries
+name: Release Electron App
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
+    branches: [ master, main ] # Triggers automatically on every push to master or main
   workflow_dispatch: # Allows manual execution from the GitHub UI
 
-# Forces Node.js 24 environment compatibility
+# Enforce Node.js 24 compliance and explicit runner variables
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  build-and-release:
     permissions:
       contents: write # Required to publish assets to the Release page
     
     strategy:
       fail-fast: false
       matrix:
-        # We use the three main GitHub OS runners
         os: [ubuntu-latest, windows-latest, macos-latest]
 
+    runs-on: ${{ matrix.os }}
     steps:
-      # 1. Checkout repository code
+      # 1. Fetch code from repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js workspace runtime
+      # 2. Setup standard Node.js runtime using Node 24
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
 
-      # 3. Install system-specific compilation libraries (Only required on Ubuntu/Linux)
+      # 3. Install required platform packages (xvfb maps virtual displays for Linux headless builds)
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm fakeroot dpkg
+          sudo apt-get install -y rpm fakeroot dpkg xvfb libsecret-1-dev
 
-      # 4. Install app project dependencies
+      # 4. Clean install project dependencies
       - name: Install dependencies
         run: npm ci
 
-      # 5. Run the Electron Forge compilation pipeline
-      - name: Run Electron Forge Make
+      # 5. Compile installers (using virtual display wrapper for Linux to guarantee package output)
+      - name: Run Electron Forge Make (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" npm run make
+
+      - name: Run Electron Forge Make (Windows / macOS)
+        if: matrix.os != 'ubuntu-latest'
         run: npm run make
 
-      # 6. COLLECTING: Find binaries in the entire project workspace (ignoring node_modules)
-      - name: Collect Distributables (Linux / macOS)
+      # 6. FILTER & COLLECT: Extract only clean binaries into a flat workspace, fully skipping .zip files
+      - name: Collect Target Binaries (Linux / macOS)
         if: matrix.os != 'windows-latest'
         run: |
-          mkdir -p dist-artifacts
-          find . -type d \( -name "node_modules" -o -name "dist-artifacts" \) -prune -o -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} dist-artifacts/ \;
-          echo "=== Collected artifacts ==="
-          ls -la dist-artifacts/ || true
+          mkdir -p production-artifacts
+          find . -type d \( -name "node_modules" -o -name "production-artifacts" \) -prune -o -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} production-artifacts/ \;
+          echo "=== Collected Binary Artifacts ==="
+          ls -la production-artifacts/ || true
 
-      - name: Collect Distributables (Windows)
+      - name: Collect Target Binaries (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          mkdir dist-artifacts
-          Get-ChildItem -Path . -Recurse -Filter *.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*dist-artifacts*" } | Copy-Item -Destination dist-artifacts/
-          Write-Output "=== Collected artifacts ==="
-          Get-ChildItem -Path dist-artifacts/
+          mkdir production-artifacts
+          Get-ChildItem -Path . -Recurse -Filter *.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*production-artifacts*" } | Copy-Item -Destination production-artifacts/
+          Write-Output "=== Collected Binary Artifacts ==="
+          Get-ChildItem -Path production-artifacts/
 
-      # 7. PUBLISHING: Attach individual clean binaries directly to the 'latest' release
-      - name: Deploy Binaries to GitHub Releases
+      # 7. DEPLOY: Attach individual clean binaries natively to the 'latest' release layout
+      - name: Deploy Separate Assets to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -78,4 +79,4 @@ jobs:
           body: 'This release always contains the separate Electron download binaries from the latest commit.'
           overwrite_files: true
           make_latest: true
-          files: dist-artifacts/*
+          files: production-artifacts/*
