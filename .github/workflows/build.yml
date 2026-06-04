@@ -1,69 +1,71 @@
-name: Release Electron App
+name: Build Cross-Platform Binaries
 
 on:
   push:
     branches: [ master, main ]
-  workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch: # Maakt het mogelijk om de build handmatig te starten via GitHub
 
 jobs:
-  build-and-release:
-    permissions:
-      contents: write
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     
     strategy:
-      fail-fast: false
       matrix:
+        # We gebruiken de drie verschillende OS runners van GitHub
         os: [ubuntu-latest, windows-latest, macos-latest]
 
-    runs-on: ${{ matrix.os }}
     steps:
+      # 1. Haal de code op uit de repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (Node 24)
+      # 2. Installeer Node.js (versie 20 is stabiel voor Electron)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: 'npm'
 
+      # 3. Systeem-specifieke dependencies installeren (Alleen nodig op Linux voor DEB/RPM)
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm fakeroot dpkg xvfb libsecret-1-dev
+          sudo apt-get install -y rpm fakeroot dpkg
 
+      # 4. Installeer alle project dependencies (inclusief devDependencies)
       - name: Install dependencies
         run: npm ci
 
-      # Bouw de app (Met virtuele display op Linux)
-      - name: Run Electron Forge Make (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" npm run make
-
-      # Bouw de app op Windows en Mac
-      - name: Run Electron Forge Make (Windows / macOS)
-        if: matrix.os != 'ubuntu-latest'
+      # 5. Voer het Electron Forge compiler-commando uit
+      - name: Run Electron Forge Make
         run: npm run make
 
-      # VERZAMELEN: We pakken direct de installers uit de geforceerde map en negeren de zips
-      - name: Process Distributables
-        run: |
-          mkdir -p production-binaries
-          find dist-packages/ -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.exe" \) -exec cp {} production-binaries/ \; || true
-          echo "=== Found the following binaries in the correct folder ==="
-          ls -la production-binaries/
-
-      # PUBLICEREN: Hang de losse binaries direct aan de 'latest' release
-      - name: Deploy Separate Assets to GitHub Releases
-        uses: softprops/action-gh-release@v2
+      # 6. Verzamel en upload de gegenereerde binaries naar GitHub Artifacts
+      - name: Upload Artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: latest
-          name: 'Latest Electron Continuous Build'
-          body: 'This release always contains the separate Electron download binaries from the latest commit.'
-          overwrite_files: true
-          make_latest: true
-          files: production-binaries/*
+          name: mkcert-gui-tool-windows
+          path: out/make/**/*.exe
+
+      - name: Upload Artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkcert-gui-tool-mac
+          path: |
+            out/make/**/*.dmg
+            out/make/**/*.zip
+
+      - name: Upload Artifacts (Linux DEB & RPM)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mkcert-gui-tool-linux
+          path: |
+            out/make/**/*.deb
+            out/make/**/*.rpm

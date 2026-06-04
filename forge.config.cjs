@@ -1,7 +1,7 @@
-const path = require('path');
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 
+// Controleer of de build op GitHub Actions draait via de standaard CI omgevingsvariabele
 const isCI = process.env.CI === 'true';
 
 const makers = [
@@ -24,6 +24,7 @@ const makers = [
   }
 ];
 
+// Voeg de RPM-maker ALLEEN toe als de app in de GitHub Actions cloud (CI) wordt gebouwd
 if (isCI) {
   makers.push({
     name: '@electron-forge/maker-rpm',
@@ -32,13 +33,11 @@ if (isCI) {
 }
 
 module.exports = {
-  // FIX: Forceert Electron Forge om de installers ALTIJD in deze specifieke projectmap te bouwen
-  outDir: path.join(__dirname, 'dist-packages'),
   packagerConfig: {
     asar: true,
   },
   rebuildConfig: {},
-  makers: makers,
+  makers: makers, // Gebruik de dynamisch opgebouwde lijst met makers
   plugins: [
     {
       name: '@electron-forge/plugin-auto-unpack-natives',
