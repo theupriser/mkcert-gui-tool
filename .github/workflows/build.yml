@@ -1,71 +1,79 @@
-name: Build Cross-Platform Binaries
+name: Release Electron App
 
 on:
   push:
-    branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
-  workflow_dispatch: # Maakt het mogelijk om de build handmatig te starten via GitHub
+    branches: [ master, main ] # Triggered automatically on every push to master or main
+  workflow_dispatch: # Allows manual execution from the GitHub UI
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  build-and-release:
+    permissions:
+      contents: write # Required to publish assets to the Release page
     
     strategy:
+      fail-fast: false
       matrix:
-        # We gebruiken de drie verschillende OS runners van GitHub
         os: [ubuntu-latest, windows-latest, macos-latest]
 
+    runs-on: ${{ matrix.os }}
     steps:
-      # 1. Haal de code op uit de repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installeer Node.js (versie 20 is stabiel voor Electron)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      # 3. Systeem-specifieke dependencies installeren (Alleen nodig op Linux voor DEB/RPM)
+      # Linux-specific dependencies for Electron Forge (fakeroot and rpmbuilder)
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg
 
-      # 4. Installeer alle project dependencies (inclusief devDependencies)
       - name: Install dependencies
         run: npm ci
 
-      # 5. Voer het Electron Forge compiler-commando uit
+      # Run the Electron Forge compilation pipeline
       - name: Run Electron Forge Make
         run: npm run make
 
-      # 6. Verzamel en upload de gegenereerde binaries naar GitHub Artifacts
-      - name: Upload Artifacts (Windows)
+      # Deploy to GitHub Releases (Windows - publishes only the .exe binary)
+      - name: Deploy to GitHub Releases (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v2
         with:
-          name: mkcert-gui-tool-windows
-          path: out/make/**/*.exe
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: latest
+          name: 'Latest Electron Continuous Build'
+          body: 'This release always contains the separate Electron download binaries from the latest commit.'
+          overwrite: true
+          files: out/make/**/*.exe
 
-      - name: Upload Artifacts (macOS)
+      # Deploy to GitHub Releases (macOS - publishes only the .dmg binary, leaving out the .zip)
+      - name: Deploy to GitHub Releases (macOS)
         if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v2
         with:
-          name: mkcert-gui-tool-mac
-          path: |
-            out/make/**/*.dmg
-            out/make/**/*.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: latest
+          name: 'Latest Electron Continuous Build'
+          body: 'This release always contains the separate Electron download binaries from the latest commit.'
+          overwrite: true
+          files: out/make/**/*.dmg
 
-      - name: Upload Artifacts (Linux DEB & RPM)
+      # Deploy to GitHub Releases (Linux - publishes only .deb and .rpm binaries, leaving out the .zip)
+      - name: Deploy to GitHub Releases (Linux DEB & RPM)
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: softprops/action-gh-release@v2
         with:
-          name: mkcert-gui-tool-linux
-          path: |
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: latest
+          name: 'Latest Electron Continuous Build'
+          body: 'This release always contains the separate Electron download binaries from the latest commit.'
+          overwrite: true
+          files: |
             out/make/**/*.deb
             out/make/**/*.rpm
