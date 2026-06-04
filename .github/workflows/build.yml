@@ -29,7 +29,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installeer Node.js (geüpdatet naar Node 24 runtime)
+      # 2. Installeer Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -43,7 +43,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg
 
-      # 4. Installeer alle project dependencies (inclusief devDependencies)
+      # 4. Installeer alle project dependencies
       - name: Install dependencies
         run: npm ci
 
@@ -51,18 +51,29 @@ jobs:
       - name: Run Electron Forge Make
         run: npm run make
 
-      # 6. VERZAMELEN: Kopieer alleen de pure installatiebestanden naar een tijdelijke, platte map
+      # 6. VERZAMELEN: Zoek flexibel in het hele project naar de juiste extensies (behalve node_modules)
       - name: Collect Distributables (Linux / macOS)
         if: matrix.os != 'windows-latest'
         run: |
           mkdir -p dist-artifacts
-          find out/make/ -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} dist-artifacts/ \;
+          # Zoekt overal naar .deb, .rpm en .dmg bestanden en negeert node_modules en dist-artifacts zelf
+          find . -type d \( -name "node_modules" -o -name "dist-artifacts" \) -prune -o -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} dist-artifacts/ \;
+          
+          echo "=== Collected artifacts ==="
+          ls -la dist-artifacts/ || true
 
+       Taras: Collect Distributables (Windows)
       - name: Collect Distributables (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           mkdir dist-artifacts
-          Get-ChildItem -Path out/make/ -Recurse -Filter *.exe | Copy-Item -Destination dist-artifacts/
+          # Zoekt in de hele projectmap naar .exe bestanden, met uitzondering van node_modules
+          Get-ChildItem -Path . -Recurse -Filter *.exe -ErrorAction SilentlyContinue | 
+            Where-Object { $_.FullName -notlike "*node_modules*" -and $_.FullName -notlike "*dist-artifacts*" } | 
+            Copy-Item -Destination dist-artifacts/
+          
+          Write-Output "=== Collected artifacts ==="
+          Get-ChildItem -Path dist-artifacts/
 
       # 7. PUBLICEREN: Hang de losse binaries direct aan de 'latest' release (oude bestanden worden overschreven)
       - name: Deploy Binaries to GitHub Releases
