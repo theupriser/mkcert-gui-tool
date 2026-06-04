@@ -1,102 +1,71 @@
-name: Release Electron App
+name: Build Cross-Platform Binaries
 
 on:
   push:
     branches: [ master, main ]
-  workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch: # Maakt het mogelijk om de build handmatig te starten via GitHub
 
 jobs:
-  build-and-release:
-    permissions:
-      contents: write
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     
     strategy:
-      fail-fast: false
       matrix:
+        # We gebruiken de drie verschillende OS runners van GitHub
         os: [ubuntu-latest, windows-latest, macos-latest]
 
-    runs-on: ${{ matrix.os }}
     steps:
+      # 1. Haal de code op uit de repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Installeer Node.js (versie 20 is stabiel voor Electron)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: 'npm'
 
+      # 3. Systeem-specifieke dependencies installeren (Alleen nodig op Linux voor DEB/RPM)
       - name: Install Linux build dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm fakeroot dpkg
 
+      # 4. Installeer alle project dependencies (inclusief devDependencies)
       - name: Install dependencies
         run: npm ci
 
+      # 5. Voer het Electron Forge compiler-commando uit
       - name: Run Electron Forge Make
         run: npm run make
 
-      # === NIEUW: DEBUG STAP OM MAPPENSTRUCTUUR TE INSPECTEREN ===
-      - name: Debug - List output files (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        run: |
-          echo "=== SHOWING OUT/MAKE STRUCTURE ==="
-          find out/make -type f || true
-
-      - name: Debug - List output files (Windows)
+      # 6. Verzamel en upload de gegenereerde binaries naar GitHub Artifacts
+      - name: Upload Artifacts (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          echo "=== SHOWING OUT/MAKE STRUCTURE ==="
-          Get-ChildItem -Path out/make -Recurse -File | Select-Object FullName || Write-Output "No files found"
-
-      # Deploy to GitHub Releases (Windows)
-      - name: Deploy to GitHub Releases (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: latest
-          name: 'Latest Electron Continuous Build'
-          body: 'This release always contains the separate Electron download binaries from the latest commit.'
-          overwrite_files: true
-          make_latest: true
-          files: |
-            out/make/**/*.exe
-            out/make/*.exe
+          name: mkcert-gui-tool-windows
+          path: out/make/**/*.exe
 
-      # Deploy to GitHub Releases (macOS)
-      - name: Deploy to GitHub Releases (macOS)
+      - name: Upload Artifacts (macOS)
         if: matrix.os == 'macos-latest'
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: latest
-          name: 'Latest Electron Continuous Build'
-          body: 'This release always contains the separate Electron download binaries from the latest commit.'
-          overwrite_files: true
-          make_latest: true
-          files: |
+          name: mkcert-gui-tool-mac
+          path: |
             out/make/**/*.dmg
-            out/make/*.dmg
+            out/make/**/*.zip
 
-      # Deploy to GitHub Releases (Linux DEB & RPM)
-      - name: Deploy to GitHub Releases (Linux DEB & RPM)
+      - name: Upload Artifacts (Linux DEB & RPM)
         if: matrix.os == 'ubuntu-latest'
-        uses: softprops/action-gh-release@v2
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: latest
-          name: 'Latest Electron Continuous Build'
-          body: 'This release always contains the separate Electron download binaries from the latest commit.'
-          overwrite_files: true
-          make_latest: true
-          files: |
+          name: mkcert-gui-tool-linux
+          path: |
             out/make/**/*.deb
             out/make/**/*.rpm
-            out/make/*.deb
-            out/make/*.rpm
