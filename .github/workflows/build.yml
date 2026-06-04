@@ -7,12 +7,19 @@ on:
     branches: [ master, main ]
   workflow_dispatch: # Maakt het mogelijk om de build handmatig te starten via GitHub
 
+# Zorgt voor Node.js 24 compatibiliteit volgens de richtlijnen
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write # Verplicht om bestanden naar de Release-pagina te mogen schrijven
     
     strategy:
+      fail-fast: false
       matrix:
         # We gebruiken de drie verschillende OS runners van GitHub
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -22,7 +29,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installeer Node.js (versie 20 is stabiel voor Electron)
+      # 2. Installeer Node.js (geüpdatet naar Node 24 runtime)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -44,28 +51,27 @@ jobs:
       - name: Run Electron Forge Make
         run: npm run make
 
-      # 6. Verzamel en upload de gegenereerde binaries naar GitHub Artifacts
-      - name: Upload Artifacts (Windows)
+      # 6. VERZAMELEN: Kopieer alleen de pure installatiebestanden naar een tijdelijke, platte map
+      - name: Collect Distributables (Linux / macOS)
+        if: matrix.os != 'windows-latest'
+        run: |
+          mkdir -p dist-artifacts
+          find out/make/ -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" \) -exec cp {} dist-artifacts/ \;
+
+      - name: Collect Distributables (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mkcert-gui-tool-windows
-          path: out/make/**/*.exe
+        run: |
+          mkdir dist-artifacts
+          Get-ChildItem -Path out/make/ -Recurse -Filter *.exe | Copy-Item -Destination dist-artifacts/
 
-      - name: Upload Artifacts (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
+      # 7. PUBLICEREN: Hang de losse binaries direct aan de 'latest' release (oude bestanden worden overschreven)
+      - name: Deploy Binaries to GitHub Releases
+        uses: softprops/action-gh-release@v2
         with:
-          name: mkcert-gui-tool-mac
-          path: |
-            out/make/**/*.dmg
-            out/make/**/*.zip
-
-      - name: Upload Artifacts (Linux DEB & RPM)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mkcert-gui-tool-linux
-          path: |
-            out/make/**/*.deb
-            out/make/**/*.rpm
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: latest
+          name: 'Latest Electron Continuous Build'
+          body: 'This release always contains the separate Electron download binaries from the latest commit.'
+          overwrite_files: true
+          make_latest: true
+          files: dist-artifacts/*
